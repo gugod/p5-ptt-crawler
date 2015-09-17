@@ -66,10 +66,10 @@ sub harvest_board_indices {
     @boards = @boards[1,0] if $boards[0]{page_number} > $boards[1]{page_number};
 
     push @boards, map {
-        push @boards, {
+        +{
             page_number => $_,
-            url => PTT_URL . "/bbs/${board_name}/index${_}.html"
-        };
+            url => PTT_URL . "/bbs/${board_name}/index" . $_ . ".html"
+        }
     } ( $boards[0]{page_number}+1 .. $boards[1]{page_number}-1 );
     return \@boards;
 }
