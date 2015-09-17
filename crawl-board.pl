@@ -78,8 +78,12 @@ sub download_articles {
     my ($articles, $output_dir) = @_;
     for (@$articles) {
         my $save_as = "${output_dir}/" . $_->{id} . ".html";
-        ptt_get( $_->{url} )->res->content->asset->move_to( $save_as );
-        say "==> $save_as";
+        if (-f $save_as) {
+            say "=== $save_as";
+        } else {
+            ptt_get( $_->{url} )->res->content->asset->move_to( $save_as );
+            say "==> $save_as";
+        }
     }
 }
 
