@@ -71,6 +71,10 @@ sub harvest_board_indices {
             url => PTT_URL . "/bbs/${board_name}/index" . $_ . ".html"
         }
     } ( $boards[0]{page_number}+1 .. $boards[1]{page_number}-1 );
+    push @boards, {
+        page_number => $boards[1]{page_number} + 1,
+        url => $url_board_index
+    };
     return \@boards;
 }
 
@@ -94,11 +98,8 @@ sub main {
     my $output_board_dir = "${output_dir}/${board_name}";
     make_path($output_board_dir);
 
-    my $articles = harvest_articles( $board_url, $board_name );
-    download_articles( $articles, $output_board_dir );
-
     my $board_indices = harvest_board_indices($board_url, $board_name);
-    for (@$board_indices) {
+    for (sort { $b->{page_number} <=> $a->{page_number} } @$board_indices) {
         say "== $_->{url}";
         my $articles = harvest_articles( $_->{url}, $board_name );
         download_articles( $articles, $output_board_dir );
