@@ -8,7 +8,11 @@ use Mojo::UserAgent::CookieJar;
 use constant PTT_URL => "https://www.ptt.cc";
 
 sub ptt_get {
-    my ($ua, $url) = @_;
+    my ($url) = @_;
+
+    state $ua ||= Mojo::UserAgent->new(
+        cookie_jar => Mojo::UserAgent::CookieJar->new,
+    );
 
     my $tx = $ua->max_redirects(5)->get($url);
     if (my $dom = $tx->res->dom->at("form[action='/ask/over18']")) {
@@ -24,9 +28,9 @@ sub ptt_get {
 }
 
 sub harvest_articles {
-    my ($ua, $url_board_index, $board_name) = @_;
+    my ($url_board_index, $board_name) = @_;
 
-    my $tx = ptt_get($ua, $url_board_index);
+    my $tx = ptt_get($url_board_index);
 
     my @articles;
     $tx->res->dom->find("a[href*='/bbs/${board_name}/']")->each(
@@ -46,8 +50,8 @@ sub harvest_articles {
 }
 
 sub harvest_board_indices {
-    my ($ua, $url_board_index, $board_name) = @_;
-    my $tx = ptt_get($ua, $url_board_index);
+    my ($url_board_index, $board_name) = @_;
+    my $tx = ptt_get($url_board_index);
     # https://www.ptt.cc/bbs/Gossiping/index10355.html
 
     my @boards;
@@ -63,10 +67,10 @@ sub harvest_board_indices {
 }
 
 sub download_articles {
-    my ($ua, $articles, $output_dir) = @_;
+    my ($articles, $output_dir) = @_;
     for (@$articles) {
         my $save_as = "${output_dir}/" . $_->{id} . ".html";
-        ptt_get( $ua, $_->{url} )->res->content->asset->move_to( $save_as );
+        ptt_get( $_->{url} )->res->content->asset->move_to( $save_as );
         say "==> $save_as";
     }
 }
@@ -74,16 +78,13 @@ sub download_articles {
 sub main {
     my ($board_name, $output_dir) = @_;
 
-    my $ua = Mojo::UserAgent->new;
-    $ua->cookie_jar(Mojo::UserAgent::CookieJar->new);
-
     my $board_url = PTT_URL . "/bbs/${board_name}/index.html";
 
-    my $articles = harvest_articles( $ua, $board_url, $board_name );
+    my $articles = harvest_articles( $board_url, $board_name );
 
     my $output_board_dir = "${output_dir}/${board_name}";
     make_path($output_board_dir);
-    download_articles( $ua, $articles, $output_board_dir );
+    download_articles( $articles, $output_board_dir );
 }
 
 main(@ARGV);
