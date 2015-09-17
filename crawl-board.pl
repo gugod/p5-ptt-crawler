@@ -52,17 +52,25 @@ sub harvest_articles {
 sub harvest_board_indices {
     my ($url_board_index, $board_name) = @_;
     my $tx = ptt_get($url_board_index);
-    # https://www.ptt.cc/bbs/Gossiping/index10355.html
 
     my @boards;
     $tx->res->dom->find("a[href*='/bbs/${board_name}/index']")->each(
         sub {
-            return unless (my $href = $_->attr("href")) =~ m{/bbs/${board_name}/index[0-9]+\.html}x;
+            return unless (my $href = $_->attr("href")) =~ m{/bbs/${board_name}/index([0-9]+)\.html}x;
             push @boards, {
+                page_number => $1,
                 url => PTT_URL . $href
             };
         }
     );
+    @boards = @boards[1,0] if $boards[0]{page_number} > $boards[1]{page_number};
+
+    push @boards, map {
+        push @boards, {
+            page_number => $_,
+            url => PTT_URL . "/bbs/${board_name}/index${_}.html"
+        };
+    } ( $boards[0]{page_number}+1 .. $boards[1]{page_number}-1 );
     return \@boards;
 }
 
@@ -79,12 +87,18 @@ sub main {
     my ($board_name, $output_dir) = @_;
 
     my $board_url = PTT_URL . "/bbs/${board_name}/index.html";
-
-    my $articles = harvest_articles( $board_url, $board_name );
-
     my $output_board_dir = "${output_dir}/${board_name}";
     make_path($output_board_dir);
+
+    my $articles = harvest_articles( $board_url, $board_name );
     download_articles( $articles, $output_board_dir );
+
+    my $board_indices = harvest_board_indices($board_url, $board_name);
+    for (@$board_indices) {
+        say "== $_->{url}";
+        my $articles = harvest_articles( $_->{url}, $board_name );
+        download_articles( $articles, $output_board_dir );
+    }
 }
 
 main(@ARGV);
