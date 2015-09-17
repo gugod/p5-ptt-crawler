@@ -10,7 +10,17 @@ use constant PTT_URL => "https://www.ptt.cc";
 sub harvest_articles {
     my ($ua, $url_board_index, $board_name) = @_;
 
-    my $tx = $ua->get($url_board_index);
+    my $tx = $ua->max_redirects(5)->get($url_board_index);
+    if (my $dom = $tx->res->dom->at("form[action='/ask/over18']")) {
+        $tx = $ua->post(
+            PTT_URL . '/ask/over18',
+            form => {
+                from => $dom->at("input[name='from']")->attr("value"),
+                yes  => "yes"
+            }
+        );
+    }
+
     my @articles;
     $tx->res->dom->find("a[href*='/bbs/${board_name}/']")->each(
         sub {
