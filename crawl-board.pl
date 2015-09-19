@@ -85,8 +85,10 @@ sub download_articles {
         if (-f $save_as) {
             say "=== $save_as";
         } else {
-            ptt_get( $_->{url} )->res->content->asset->move_to( $save_as );
-            say "==> $save_as";
+            if ((my $res = ptt_get( $_->{url} )->res)->code eq '200') {
+                $res->content->asset->move_to( $save_as );
+                say "==> $save_as";
+            }
         }
     }
 }
