@@ -51,7 +51,6 @@ sub convert_and_save {
     return unless $file =~ m{ / (\w+) / ([\.0-9A-Z]+) \.html$}x;
     my ($board_name, $id) = ($1, $2);
 
-    say "PROCESSING\t$board_name / $id";
     my $html_content = read_file($file, binmode => ":utf8");
     my $article = extract_article_html( $html_content );
 
@@ -64,7 +63,6 @@ sub convert_and_save {
     open(my $fh, ">:utf8", $output_file) or die $!;
     print $fh $JSON->encode($article);
     close($fh);
-    say "==> $output_file";
 }
 
 sub main {
