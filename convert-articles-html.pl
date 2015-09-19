@@ -61,7 +61,8 @@ sub convert_and_save {
 
     my $output_file = $file =~ s{\.html$}{.json}r;
     open(my $fh, ">:utf8", $output_file) or die $!;
-    print $fh $JSON->encode($article);
+    my $json_text = $JSON->encode($article) =~ s/[\x{FFFF}\x{FFFE}]//gr;
+    print $fh $json_text;
     close($fh);
 }
 
