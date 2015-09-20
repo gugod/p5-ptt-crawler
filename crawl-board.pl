@@ -2,19 +2,43 @@ use v5.18;
 
 use File::Path qw(make_path);
 
+use Mojo::IOLoop;
 use Mojo::UserAgent;
 use Mojo::UserAgent::CookieJar;
 
 use constant PTT_URL => "https://www.ptt.cc";
 
 sub ptt_get {
-    my ($url) = @_;
+    my ($url, $cb) = @_;
 
     state $ua ||= Mojo::UserAgent->new(
         cookie_jar => Mojo::UserAgent::CookieJar->new,
+        max_connections => 5,
+        max_redirects   => 2,
     );
 
-    my $tx = $ua->max_redirects(5)->get($url);
+    if ($cb) {
+        $ua->get(
+            $url, sub {
+                my ($ua, $tx) = @_;
+                if (my $dom = $tx->res->dom->at("form[action='/ask/over18']")) {
+                    $tx = $ua->post(
+                        PTT_URL . '/ask/over18',
+                        form => {
+                            from => $dom->at("input[name='from']")->attr("value"),
+                            yes  => "yes"
+                        },
+                        $cb
+                    );
+                } else {
+                    $cb->($ua, $tx);
+                }
+            }
+        );
+        return;
+    }
+
+    my $tx = $ua->get($url);
     if (my $dom = $tx->res->dom->at("form[action='/ask/over18']")) {
         $tx = $ua->post(
             PTT_URL . '/ask/over18',
@@ -28,7 +52,7 @@ sub ptt_get {
 }
 
 sub harvest_articles {
-    my ($url_board_index, $board_name) = @_;
+    my ($url_board_index, $board_name, $cb) = @_;
 
     my $tx = ptt_get($url_board_index);
 
@@ -64,7 +88,6 @@ sub harvest_board_indices {
         }
     );
     @boards = @boards[1,0] if $boards[0]{page_number} > $boards[1]{page_number};
-
     push @boards, map {
         +{
             page_number => $_,
@@ -80,17 +103,32 @@ sub harvest_board_indices {
 
 sub download_articles {
     my ($articles, $output_dir) = @_;
+    my $delay = Mojo::IOLoop->delay();
+
+    my $c = 0;
     for (@$articles) {
         my $save_as = "${output_dir}/" . $_->{id} . ".html";
-        if (-f $save_as) {
-            say "=== $save_as";
-        } else {
-            if ((my $res = ptt_get( $_->{url} )->res)->code eq '200') {
-                $res->content->asset->move_to( $save_as );
-                say "==> $save_as";
+        next if -f $save_as;
+
+        $c++;
+        my $end = $delay->begin;
+        ptt_get(
+            $_->{url},
+            sub {
+                my ($ua, $tx) = @_;
+                if ((my $res = $tx->res)->code eq '200') {
+                    $res->content->asset->move_to($save_as);
+                    say "[$$] ==> $save_as";
+                }
+                $end->();
             }
+        );
+        if ($c > 4) {
+            $delay->wait;
+            $c = 0;
         }
     }
+    $delay->wait;
 }
 
 sub main {
@@ -102,10 +140,11 @@ sub main {
 
     my $board_indices = harvest_board_indices($board_url, $board_name);
     for (sort { $b->{page_number} <=> $a->{page_number} } @$board_indices) {
-        say "== $_->{url}";
-        my $articles = harvest_articles( $_->{url}, $board_name );
+        say "# $_->{url}";
+        my $articles = harvest_articles($_->{url}, $board_name);
         download_articles( $articles, $output_board_dir );
     }
+    Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
 }
 
 main(@ARGV);
